@@ -35,6 +35,9 @@ titan_templates/
 │   │   └── kubernetes-cluster-dashboard.json
 │   └── examples/              # Example configurations
 └── docs/                      # Additional documentation
+    ├── library-reference.md     # Complete function reference
+    ├── grafonnet-guide.md       # Getting started with Grafonnet
+    └── migration-guide.md       # Migrating from custom to Grafonnet
 ```
 
 ## 🚀 Quick Start
@@ -111,6 +114,30 @@ prometheus.prometheusRule(config.service + '-monitoring', 'monitoring', [{
 
 ### Compile and Apply
 
+**Using Grafonnet Integration (Recommended):**
+
+```bash
+# Generate both alerts and dashboard for a service
+jsonnet --jpath jsonnet/lib -e '
+local grafonnet = import "grafonnet.libsonnet";
+grafonnet.integration.monitoring("my-service", "production", "my-team")
+' > monitoring-complete.json
+
+# Extract just the PrometheusRule
+jsonnet --jpath jsonnet/lib -e '
+local grafonnet = import "grafonnet.libsonnet";
+grafonnet.integration.monitoring("my-service").prometheusRule
+' | kubectl apply -f -
+
+# Extract just the Dashboard for Grafana import
+jsonnet --jpath jsonnet/lib -e '
+local grafonnet = import "grafonnet.libsonnet";
+grafonnet.integration.monitoring("my-service").dashboard
+' > dashboard.json
+```
+
+**Traditional Approach:**
+
 ```bash
 # Compile Jsonnet to YAML
 jsonnet jsonnet/examples/basic-service-monitoring.jsonnet | kubectl apply -f -
@@ -118,6 +145,37 @@ jsonnet jsonnet/examples/basic-service-monitoring.jsonnet | kubectl apply -f -
 # Or save to file first
 jsonnet jsonnet/examples/basic-service-monitoring.jsonnet > monitoring-rules.yaml
 kubectl apply -f monitoring-rules.yaml
+```
+
+### Example Output
+
+Here's what the Grafonnet integration generates:
+
+```bash
+# Show available queries
+$ jsonnet --jpath jsonnet/lib -e '
+  local g = import "grafonnet.libsonnet"; 
+  std.objectFields(g.queries)'
+[
+   "errorRate",
+   "latency", 
+   "requestRate",
+   "resources",
+   "serviceHealth",
+   "slo"
+]
+
+# Show a request rate query
+$ jsonnet --jpath jsonnet/lib -e '
+  local g = import "grafonnet.libsonnet"; 
+  g.queries.requestRate("payment-service")'
+"sum(rate(http_requests_total{job=~\"payment-service\"}[5m])) by (job)"
+
+# Count panels in standard layout
+$ jsonnet --jpath jsonnet/lib -e '
+  local g = import "grafonnet.libsonnet"; 
+  std.length(g.layouts.monitoring("my-service"))'
+6
 ```
 
 ## 📚 Library Components
@@ -261,6 +319,57 @@ Comprehensive cluster overview including:
 
 ## 🔧 Advanced Usage
 
+### Complete Monitoring Setup with Grafonnet
+
+Create comprehensive monitoring that includes both alerts and dashboards:
+
+```jsonnet
+local grafonnet = import 'jsonnet/lib/grafonnet.libsonnet';
+
+// One-line complete monitoring setup
+local monitoring = grafonnet.integration.monitoring(
+  'payment-service',
+  'production', 
+  'payments-team',
+  { availability: 99.95, error_rate: 0.1 }
+);
+
+{
+  // Kubernetes PrometheusRule
+  prometheusRule: monitoring.prometheusRule,
+  
+  // Grafana Dashboard JSON
+  dashboard: monitoring.dashboard,
+}
+```
+
+This generates:
+- **PrometheusRule** with service down, error rate, and latency alerts
+- **Grafana Dashboard** with 6 panels: health, request rate, error rate, latency, CPU, memory
+- **Template variables** for service and instance filtering  
+- **Consistent styling** and thresholds
+
+### Integration with Existing Dashboards
+
+Extend existing dashboards with Grafonnet panels:
+
+```jsonnet
+local grafonnet = import 'jsonnet/lib/grafonnet.libsonnet';
+
+// Add business-specific panels to standard layout
+local businessPanels = [
+  grafonnet.panelTemplates.requestRate('Payment Volume', 'payment-service') + {
+    targets: [{
+      expr: 'sum(rate(payment_transactions_total[5m])) by (payment_type)',
+      legendFormat: '{{payment_type}}',
+    }],
+  },
+];
+
+// Combine with standard monitoring layout
+local allPanels = grafonnet.layouts.monitoring('payment-service') + businessPanels;
+```
+
 ### SLO Monitoring Example
 
 Create Service Level Objective monitoring with automatic SLI calculation and alerting:
@@ -334,6 +443,13 @@ done
 ```
 
 ## 📖 Best Practices
+
+### Choosing Between Libraries
+
+- **New projects**: Start with Grafonnet integration for complete monitoring
+- **Existing projects**: See [Migration Guide](docs/migration-guide.md) for upgrading from custom library
+- **Simple use cases**: Custom Grafana library for basic dashboards
+- **Production environments**: Grafonnet integration for standardization
 
 ### Naming Conventions
 
