@@ -148,30 +148,34 @@ Creates a PrometheusRule CRD.
 - `namespace` (string): Kubernetes namespace
 - `groups` (array): Rule groups
 
-## Grafana Library (`jsonnet/lib/grafana.libsonnet`)
+## Grafana Libraries
 
-### Panels
+### Custom Grafana Library (`jsonnet/lib/grafana.libsonnet`)
 
-#### `panels.timeSeries(title, targets=[], unit='short', min=null, max=null)`
+A lightweight custom library for basic Grafana dashboard generation.
+
+#### Panels
+
+##### `panels.timeSeries(title, targets=[], unit='short', min=null, max=null)`
 Creates a time series panel for the new Grafana format.
 
-#### `panels.stat(title, targets=[], unit='short', thresholds=[])`
+##### `panels.stat(title, targets=[], unit='short', thresholds=[])`
 Creates a stat panel.
 
-#### `panels.table(title, targets=[], columns=[])`
+##### `panels.table(title, targets=[], columns=[])`
 Creates a table panel.
 
-### Targets
+#### Targets
 
-#### `targets.prometheus(expr, legendFormat='', interval='')`
+##### `targets.prometheus(expr, legendFormat='', interval='')`
 Creates a Prometheus target.
 
-#### `targets.prometheusMulti(queries)`
+##### `targets.prometheusMulti(queries)`
 Creates multiple Prometheus targets with auto-assigned refIds.
 
-### Dashboard
+#### Dashboard
 
-#### `dashboard(title, description='', tags=[], panels=[], time_from='now-1h', time_to='now', refresh='30s')`
+##### `dashboard(title, description='', tags=[], panels=[], time_from='now-1h', time_to='now', refresh='30s')`
 Creates a complete Grafana dashboard.
 
 **Parameters:**
@@ -182,6 +186,108 @@ Creates a complete Grafana dashboard.
 - `time_from` (string): Default time range start
 - `time_to` (string): Default time range end
 - `refresh` (string): Auto-refresh interval
+
+### Grafonnet Integration Library (`jsonnet/lib/grafonnet.libsonnet`)
+
+**Recommended approach** for production dashboards using the industry-standard Grafonnet library.
+
+#### Prerequisites
+
+Install Grafonnet library:
+```bash
+# Using jsonnet-bundler
+jb install github.com/grafana/grafonnet-lib/grafonnet
+
+# Or add to import path
+git clone https://github.com/grafana/grafonnet-lib.git
+```
+
+#### Dashboard Creation
+
+##### `dashboard.monitoring(title, service, environment='production', team='platform')`
+Creates a standardized monitoring dashboard using Grafonnet.
+
+**Example:**
+```jsonnet
+local grafonnet = import 'jsonnet/lib/grafonnet.libsonnet';
+
+grafonnet.dashboard.monitoring(
+  'My Service Dashboard',
+  'my-service',
+  'production',
+  'backend-team'
+)
+```
+
+##### `dashboard.slo(title, service, slos={})`
+Creates an SLO-focused dashboard.
+
+**Parameters:**
+- `slos.availability` (number): Availability target (e.g., 99.9)
+- `slos.error_rate` (number): Error rate threshold (e.g., 0.1)
+- `slos.latency_p95` (number): P95 latency target in ms
+- `slos.latency_p99` (number): P99 latency target in ms
+
+#### Panels
+
+##### `panels.serviceHealth(service)`
+Service health indicator with up/down status.
+
+##### `panels.requestRate(service, title='Request Rate')`
+Request rate time series panel.
+
+##### `panels.errorRate(service, title='Error Rate', warning=1, critical=5)`
+Error rate panel with configurable thresholds.
+
+##### `panels.latency(service, title='Response Time')`
+Latency percentiles (P50, P95, P99) panel.
+
+##### `panels.sloBurnRate(service, sloTarget=99.9, title='SLO Burn Rate')`
+SLO error budget burn rate visualization.
+
+##### `panels.resourceUsage(service, resource='memory', title=null)`
+Resource usage panel for CPU or memory.
+
+**Parameters:**
+- `resource` (string): 'memory' or 'cpu'
+
+#### Layout Helpers
+
+##### `layout.monitoring(service)`
+Standard monitoring layout with common panels.
+
+##### `layout.slo(service, slos={})`
+SLO-focused layout optimized for SLO monitoring.
+
+#### Integration Functions
+
+##### `integration.monitoring(service, environment='production', team='platform', slos={})`
+Generates both PrometheusRule and Dashboard for complete monitoring setup.
+
+**Returns:**
+```jsonnet
+{
+  prometheusRule: { /* Prometheus alerts */ },
+  dashboard: { /* Grafana dashboard */ }
+}
+```
+
+**Example:**
+```jsonnet
+local grafonnet = import 'jsonnet/lib/grafonnet.libsonnet';
+
+local monitoring = grafonnet.integration.monitoring(
+  'payment-service',
+  'production',
+  'payments-team',
+  { availability: 99.95, error_rate: 0.1 }
+);
+
+{
+  prometheusRule: monitoring.prometheusRule,
+  dashboard: monitoring.dashboard,
+}
+```
 
 ## Template Examples
 
